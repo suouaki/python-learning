@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线Python编辑器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/pyodide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            width: 250px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-explorer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 12px 15px;
+            background: #e9ecef;
+            font-weight: 600;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-list {
+            flex: 1;
+            padding: 10px;
+        }
+
+        .file-item {
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .file-item:hover {
+            background: #e3f2fd;
+        }
+
+        .file-item.active {
+            background: #2196f3;
+            color: white;
+        }
+
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tabs {
+            background: #f1f3f4;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            min-height: 40px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            margin-right: 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid #2196f3;
+        }
+
+        .tab:hover:not(.active) {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .editor-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #editor {
+            height: 100%;
+            width: 100%;
+        }
+
+        .right-panel {
+            width: 350px;
+            background: #f8f9fa;
+            border-left: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-header {
+            padding: 12px 15px;
+            background: #e9ecef;
+            font-weight: 600;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .output-content {
+            flex: 1;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            padding: 15px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .status-bar {
+            background: #2c3e50;
+            color: white;
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .loading-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #ffc107;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .package-manager {
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            padding: 15px;
+        }
+
+        .package-input {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .package-input input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .installed-packages {
+            max-height: 120px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .package-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: #f8f9fa;
+            margin: 2px 0;
+            border-radius: 3px;
+        }
+
+        .error {
+            color: #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+        }
+
+        .warning {
+            color: #f39c12;
+        }
+
+        .examples-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+            overflow: hidden;
+            top: 100%;
+            right: 0;
+        }
+
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            transition: background 0.2s;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+
+        .examples-dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .left-panel, .right-panel {
+                width: 0;
+                overflow: hidden;
+            }
+            
+            .left-panel.mobile-open, .right-panel.mobile-open {
+                width: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <i class="fab fa-python"></i>
+                Python在线编辑器
+            </h1>
+            <div class="header-controls">
+                <div class="examples-dropdown">
+                    <button class="btn btn-secondary">
+                        <i class="fas fa-code"></i>
+                        示例代码
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-content">
+                        <a href="#" onclick="loadExample('hello')">Hello World</a>
+                        <a href="#" onclick="loadExample('math')">数学计算</a>
+                        <a href="#" onclick="loadExample('plot')">数据可视化</a>
+                        <a href="#" onclick="loadExample('requests')">网络请求</a>
+                        <a href="#" onclick="loadExample('pandas')">数据处理</a>
+                        <a href="#" onclick="loadExample('ai')">机器学习</a>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="clearOutput()">
+                    <i class="fas fa-trash"></i>
+                    清空输出
+                </button>
+                <button class="btn btn-primary" onclick="runCode()" id="runBtn">
+                    <i class="fas fa-play"></i>
+                    运行代码
+                </button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="file-explorer">
+                    <div class="panel-header">
+                        <i class="fas fa-folder"></i>
+                        文件浏览器
+                    </div>
+                    <div class="file-list">
+                        <div class="file-item active" onclick="switchFile('main.py')">
+                            <i class="fab fa-python"></i>
+                            main.py
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="editor-area">
+                <div class="tabs">
+                    <div class="tab active">
+                        <i class="fab fa-python"></i>
+                        main.py
+                    </div>
+                </div>
+                <div class="editor-container">
+                    <div id="editor"></div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="output-section">
+                    <div class="output-header">
+                        <span>
+                            <i class="fas fa-terminal"></i>
+                            输出结果
+                        </span>
+                        <div class="loading-indicator" id="loadingIndicator">
+                            <div class="spinner"></div>
+                            执行中...
+                        </div>
+                    </div>
+                    <div class="output-content" id="output">
+欢迎使用Python在线编辑器！
+
+功能特性：
+• 支持完整的Python语法
+• 内置常用库支持
+• 实时代码编辑和运行
+• 包管理器
+• 多种示例代码
+
+点击"运行代码"开始编程吧！
+                    </div>
+                </div>
+                
+                <div class="package-manager">
+                    <div class="panel-header" style="padding: 8px 0;">
+                        <i class="fas fa-box"></i>
+                        包管理器
+                    </div>
+                    <div class="package-input">
+                        <input type="text" id="packageInput" placeholder="输入包名 (如: numpy, pandas)" onkeypress="handlePackageInput(event)">
+                        <button class="btn btn-primary" onclick="installPackage()" style="padding: 6px 12px; font-size: 12px;">
+                            <i class="fas fa-download"></i>
+                            安装
+                        </button>
+                    </div>
+                    <div class="installed-packages" id="installedPackages">
+                        <div class="package-item">
+                            <span>numpy</span>
+                            <span class="success">已安装</span>
+                        </div>
+                        <div class="package-item">
+                            <span>pandas</span>
+                            <span class="success">已安装</span>
+                        </div>
+                        <div class="package-item">
+                            <span>matplotlib</span>
+                            <span class="success">已安装</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <i class="fas fa-circle success"></i>
+                Python环境就绪
+            </div>
+            <div class="status-item">
+                <span>行: 1, 列: 1</span>
+            </div>
+            <div class="status-item">
+                <span>UTF-8</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pyodide;
+        let editor;
+        let currentFile = 'main.py';
+        let files = {
+            'main.py': `# 欢迎使用Python在线编辑器
+print("Hello, Python!")
+print("这是一个功能完整的在线Python开发环境")
+
+# 尝试一些基础操作
+import math
+import datetime
+
+# 数学计算
+result = math.sqrt(16) + math.pi
+print(f"数学计算结果: {result:.2f}")
+
+# 获取当前时间
+now = datetime.datetime.now()
+print(f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# 列表操作
+numbers = [1, 2, 3, 4, 5]
+squared = [x**2 for x in numbers]
+print(f"平方数列表: {squared}")
+`
+        };
+
+        const examples = {
+            hello: `# Hello World 示例
+print("Hello, World!")
+print("欢迎使用Python!")
+
+# 变量和基本操作
+name = "Python开发者"
+age = 25
+print(f"你好，{name}，你今年{age}岁了")
+
+# 循环
+for i in range(5):
+    print(f"这是第 {i+1} 次循环")`,
+
+            math: `# 数学计算示例
+import math
+
+# 基础数学运算
+a = 10
+b = 3
+print(f"加法: {a} + {b} = {a + b}")
+print(f"减法: {a} - {b} = {a - b}")
+print(f"乘法: {a} * {b} = {a * b}")
+print(f"除法: {a} / {b} = {a / b:.2f}")
+
+# 高级数学函数
+print(f"平方根 √{a} = {math.sqrt(a):.2f}")
+print(f"幂运算 {a}^{b} = {math.pow(a, b)}")
+print(f"圆周率 π = {math.pi:.6f}")
+print(f"自然对数 ln({a}) = {math.log(a):.2f}")
+
+# 三角函数
+angle = math.pi / 4  # 45度
+print(f"sin(45°) = {math.sin(angle):.3f}")
+print(f"cos(45°) = {math.cos(angle):.3f}")`,
+
+            plot: `# 数据可视化示例
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 生成数据
+x = np.linspace(0, 2*np.pi, 100)
+y1 = np.sin(x)
+y2 = np.cos(x)
+
+# 创建图表
+plt.figure(figsize=(10, 6))
+plt.plot(x, y1, label='sin(x)', color='blue', linewidth=2)
+plt.plot(x, y2, label='cos(x)', color='red', linewidth=2)
+
+# 设置图表
+plt.title('三角函数图像', fontsize=16)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.axhline(y=0, color='k', linewidth=0.5)
+plt.axvline(x=0, color='k', linewidth=0.5)
+
+# 显示图表
+plt.tight_layout()
+plt.show()
+
+print("图表已生成完成！")`,
+
+            requests: `# 网络请求示例（模拟）
+import json
+from datetime import datetime
+
+# 模拟API响应数据
+def simulate_api_request(url):
+    """模拟网络请求"""
+    if "weather" in url:
+        return {
+            "city": "北京",
+            "temperature": "22°C",
+            "weather": "晴朗",
+            "humidity": "45%",
+            "timestamp": datetime.now().isoformat()
+        }
+    elif "news" in url:
+        return {
+            "articles": [
+                {"title": "Python 3.12发布", "author": "Python团队"},
+                {"title": "AI技术新突破", "author": "科技日报"},
+                {"title": "开源项目推荐", "author": "开发者社区"}
+            ]
+        }
+    return {"error": "未知的API端点"}
+
+# 模拟天气API
+print("🌤️ 获取天气信息...")
+weather_data = simulate_api_request("https://api.weather.com/current")
+print(f"城市: {weather_data['city']}")
+print(f"温度: {weather_data['temperature']}")
+print(f"天气: {weather_data['weather']}")
+print(f"湿度: {weather_data['humidity']}")
+
+print("\\n📰 获取新闻信息...")
+news_data = simulate_api_request("https://api.news.com/latest")
+for i, article in enumerate(news_data['articles'], 1):
+    print(f"{i}. {article['title']} - {article['author']}")`,
+
+            pandas: `# 数据处理示例
+import pandas as pd
+import numpy as np
+
+# 创建示例数据
+data = {
+    'name': ['张三', '李四', '王五', '赵六', '钱七'],
+    'age': [25, 30, 35, 28, 32],
+    'city': ['北京', '上海', '广州', '深圳', '杭州'],
+    'salary': [8000, 12000, 15000, 9500, 11000],
+    'department': ['技术', '市场', '技术', '人事', '市场']
+}
+
+# 创建DataFrame
+df = pd.DataFrame(data)
+print("📊 员工数据表:")
+print(df)
+
+print("\\n📈 数据统计信息:")
+print(f"总人数: {len(df)}")
+print(f"平均年龄: {df['age'].mean():.1f}岁")
+print(f"平均薪资: {df['salary'].mean():.0f}元")
+
+print("\\n🏢 按部门统计:")
+dept_stats = df.groupby('department').agg({
+    'age': 'mean',
+    'salary': ['mean', 'count']
+}).round(1)
+print(dept_stats)
+
+print("\\n🔍 薪资排序 (Top 3):")
+top_salary = df.nlargest(3, 'salary')[['name', 'salary', 'city']]
+print(top_salary)
+
+# 数据过滤
+print("\\n💰 高薪员工 (>10000):")
+high_salary = df[df['salary'] > 10000][['name', 'salary', 'department']]
+print(high_salary)`,
+
+            ai: `# 机器学习示例
+import numpy as np
+from datetime import datetime
+
+# 模拟简单的线性回归
+print("🤖 机器学习示例 - 简单线性回归")
+print("=" * 40)
+
+# 生成模拟数据
+np.random.seed(42)
+X = np.random.randn(100, 1) * 2 + 1  # 特征
+noise = np.random.randn(100, 1) * 0.5
+y = 2 * X + 3 + noise  # 目标值 y = 2x + 3 + 噪声
+
+print(f"数据集大小: {X.shape[0]} 样本")
+print(f"特征维度: {X.shape[1]}")
+
+# 简单的梯度下降实现
+def linear_regression(X, y, learning_rate=0.01, epochs=1000):
+    m, n = X.shape
+    
+    # 添加偏置项
+    X_with_bias = np.column_stack([np.ones(m), X])
+    
+    # 初始化参数
+    theta = np.random.randn(n + 1, 1) * 0.01
+    
+    costs = []
+    
+    for epoch in range(epochs):
+        # 前向传播
+        predictions = X_with_bias.dot(theta)
+        
+        # 计算损失
+        cost = np.mean((predictions - y) ** 2) / 2
+        costs.append(cost)
+        
+        # 反向传播
+        gradients = X_with_bias.T.dot(predictions - y) / m
+        
+        # 更新参数
+        theta -= learning_rate * gradients
+        
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch:4d}: Cost = {cost:.6f}")
+    
+    return theta, costs
+
+# 训练模型
+print("\\n🎯 开始训练模型...")
+theta, costs = linear_regression(X, y)
+
+print(f"\\n✅ 训练完成!")
+print(f"学习到的参数:")
+print(f"偏置项 (b): {theta[0][0]:.3f}")
+print(f"权重 (w): {theta[1][0]:.3f}")
+print(f"真实参数: b=3, w=2")
+print(f"最终损失: {costs[-1]:.6f}")
+
+# 预测
+test_X = np.array([[1.5], [2.0], [2.5]])
+X_test_with_bias = np.column_stack([np.ones(3), test_X])
+predictions = X_test_with_bias.dot(theta)
+
+print(f"\\n🔮 预测结果:")
+for i, (x_val, pred) in enumerate(zip(test_X.flatten(), predictions.flatten())):
+    true_val = 2 * x_val + 3
+    print(f"输入: {x_val:.1f} -> 预测: {pred:.2f}, 真实: {true_val:.2f}")
+
+print("\\n🎉 机器学习演示完成！")`
+        };
+
+        // 初始化Monaco编辑器
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: files[currentFile],
+                language: 'python',
+                theme: 'vs-dark',
+                fontSize: 14,
+                lineNumbers: 'on',
+                roundedSelection: false,
+                scrollBeyondLastLine: false,
+                readOnly: false,
+                automaticLayout: true,
+                minimap: { enabled: true },
+                wordWrap: 'on',
+                folding: true,
+                lineNumbersMinChars: 3,
+                glyphMargin: true
+            });
+
+            // 监听光标位置变化
+            editor.onDidChangeCursorPosition(function(e) {
+                document.querySelector('.status-bar .status-item:nth-child(2) span').textContent = 
+                    `行: ${e.position.lineNumber}, 列: ${e.position.column}`;
+            });
+
+            // 监听内容变化
+            editor.onDidChangeModelContent(function() {
+                files[currentFile] = editor.getValue();
+            });
+        });
+
+        // 初始化Pyodide
+        async function initPyodide() {
+            try {
+                console.log("正在加载Pyodide...");
+                pyodide = await loadPyodide({
+                    indexURL: "https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/"
+                });
+                
+                // 预安装常用包
+                await pyodide.loadPackage(["numpy", "pandas", "matplotlib", "scipy", "scikit-learn"]);
+                
+                console.log("Pyodide加载完成");
+                updateStatus("Python环境就绪", "success");
+                
+                // 设置matplotlib后端
+                pyodide.runPython(`
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import io
+import base64
+
+def show_plot():
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode()
+    plt.close()
+    
+    # 在输出中显示图片
+    print(f'<img src="data:image/png;base64,{img_base64}" style="max-width: 100%; height: auto;" />')
+
+# 重定向plt.show()
+plt.show = show_plot
+                `);
+                
+            } catch (error) {
+                console.error("Pyodide加载失败:", error);
+                updateStatus("Python环境加载失败", "error");
+                appendOutput("❌ Python环境初始化失败: " + error.message, "error");
+            }
+        }
+
+        // 运行代码
+        async function runCode() {
+            if (!pyodide) {
+                appendOutput("⏳ Python环境正在初始化，请稍候...", "warning");
+                await initPyodide();
+                if (!pyodide) return;
+            }
+
+            const code = editor.getValue();
+            if (!code.trim()) {
+                appendOutput("⚠️ 请输入代码后再运行", "warning");
+                return;
+            }
+
+            showLoading(true);
+            const startTime = Date.now();
+
+            try {
+                // 清空之前的输出缓冲
+                pyodide.runPython(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+sys.stderr = StringIO()
+                `);
+
+                // 运行用户代码
+                await pyodide.runPythonAsync(code);
+
+                // 获取输出
+                const stdout = pyodide.runPython("sys.stdout.getvalue()");
+                const stderr = pyodide.runPython("sys.stderr.getvalue()");
+
+                const endTime = Date.now();
+                const executionTime = endTime - startTime;
+
+                // 显示结果
+                appendOutput(`\n🚀 代码执行完成 (耗时: ${executionTime}ms)\n${'='.repeat(50)}`, "success");
+                
+                if (stdout) {
+                    // 检查是否包含HTML（如图片）
+                    if (stdout.includes('<img')) {
+                        // 创建一个临时div来渲染HTML
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = stdout;
+                        document.getElementById('output').appendChild(tempDiv);
+                    } else {
+                        appendOutput(stdout);
+                    }
+                }
+                
+                if (stderr) {
+                    appendOutput("❌ 错误信息:\n" + stderr, "error");
+                }
+
+                if (!stdout && !stderr) {
+                    appendOutput("✅ 代码执行完成，无输出", "success");
+                }
+
+            } catch (error) {
+                appendOutput("❌ 运行错误:\n" + error.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 加载示例代码
+        function loadExample(type) {
+            if (examples[type]) {
+                editor.setValue(examples[type]);
+                files[currentFile] = examples[type];
+                appendOutput(`📝 已加载示例: ${type}`, "success");
+            }
+        }
+
+        // 安装包
+        async function installPackage() {
+            const packageName = document.getElementById('packageInput').value.trim();
+            if (!packageName) {
+                appendOutput("⚠️ 请输入包名", "warning");
+                return;
+            }
+
+            if (!pyodide) {
+                appendOutput("⚠️ Python环境未就绪", "warning");
+                return;
+            }
+
+            showLoading(true);
+            appendOutput(`📦 正在安装包: ${packageName}...`, "warning");
+
+            try {
+                await pyodide.loadPackage(packageName);
+                appendOutput(`✅ 包 ${packageName} 安装成功!`, "success");
+                
+                // 添加到已安装列表
+                const packagesDiv = document.getElementById('installedPackages');
+                const packageItem = document.createElement('div');
+                packageItem.className = 'package-item';
+                packageItem.innerHTML = `
+                    <span>${packageName}</span>
+                    <span class="success">已安装</span>
+                `;
+                packagesDiv.appendChild(packageItem);
+                
+                document.getElementById('packageInput').value = '';
+            } catch (error) {
+                appendOutput(`❌ 包 ${packageName} 安装失败: ${error.message}`, "error");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 处理包输入回车事件
+        function handlePackageInput(event) {
+            if (event.key === 'Enter') {
+                installPackage();
+            }
+        }
+
+        // 切换文件
+        function switchFile(filename) {
+            // 保存当前文件内容
+            if (editor && currentFile) {
+                files[currentFile] = editor.getValue();
+            }
+            
+            currentFile = filename;
+            
+            // 更新文件列表UI
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 更新编辑器内容
+            if (editor) {
+                editor.setValue(files[filename] || '# 新文件\nprint("Hello from ' + filename + '")');
+            }
+        }
+
+        // 显示/隐藏加载指示器
+        function showLoading(show) {
+            const indicator = document.getElementById('loadingIndicator');
+            const runBtn = document.getElementById('runBtn');
+            
+            if (show) {
+                indicator.style.display = 'flex';
+                runBtn.disabled = true;
+                runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中...';
+            } else {
+                indicator.style.display = 'none';
+                runBtn.disabled = false;
+                runBtn.innerHTML = '<i class="fas fa-play"></i> 运行代码';
+            }
+        }
+
+        // 更新状态栏
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.querySelector('.status-bar .status-item:first-child');
+            const iconClass = type === 'success' ? 'fas fa-circle success' : 
+                             type === 'error' ? 'fas fa-circle error' : 
+                             'fas fa-circle warning';
+            
+            statusElement.innerHTML = `<i class="${iconClass}"></i> ${message}`;
+        }
+
+        // 添加输出
+        function appendOutput(text, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : 
+                             type === 'success' ? 'success' : 
+                             type === 'warning' ? 'warning' : '';
+            
+            const line = document.createElement('div');
+            line.className = className;
+            line.innerHTML = `[${timestamp}] ${text}`;
+            
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        // 清空输出
+        function clearOutput() {
+            const output = document.getElementById('output');
+            output.innerHTML = `欢迎使用Python在线编辑器！
+
+功能特性：
+• 支持完整的Python语法
+• 内置常用库支持
+• 实时代码编辑和运行
+• 包管理器
+• 多种示例代码
+
+点击"运行代码"开始编程吧！`;
+        }
+
+        // 键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+Enter 或 Cmd+Enter 运行代码
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                runCode();
+            }
+            
+            // Ctrl+S 或 Cmd+S 保存（这里只是模拟，实际不保存到本地）
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                appendOutput("💾 代码已保存到内存", "success");
+            }
+        });
+
+        // 初始化
+        window.addEventListener('load', function() {
+            // 延迟初始化Pyodide以提高页面加载速度
+            setTimeout(initPyodide, 1000);
+            
+            // 添加一些启动提示
+            setTimeout(() => {
+                appendOutput("🎉 编辑器已就绪！", "success");
+                appendOutput("💡 提示: 使用 Ctrl+Enter 快速运行代码", "info");
+                appendOutput("📚 点击右上角'示例代码'查看更多例子", "info");
+            }, 500);
+        });
+
+        // 响应式设计支持
+        function togglePanel(panel) {
+            const element = document.querySelector(`.${panel}-panel`);
+            element.classList.toggle('mobile-open');
+        }
+
+        // 添加移动端支持
+        if (window.innerWidth <= 768) {
+            // 在移动端添加切换按钮
+            const mobileControls = document.createElement('div');
+            mobileControls.innerHTML = `
+                <button onclick="togglePanel('left')" style="margin-right: 10px;">
+                    <i class="fas fa-folder"></i>
+                </button>
+                <button onclick="togglePanel('right')">
+                    <i class="fas fa-terminal"></i>
+                </button>
+            `;
+            document.querySelector('.header-controls').prepend(mobileControls);
+        }
+
+        // 错误处理
+        window.addEventListener('error', function(e) {
+            console.error('全局错误:', e.error);
+            appendOutput(`❌ 系统错误: ${e.error?.message || '未知错误'}`, "error");
+        });
+
+        // 处理未捕获的Promise拒绝
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('未处理的Promise拒绝:', e.reason);
+            appendOutput(`❌ 异步错误: ${e.reason?.message || '未知异步错误'}`, "error");
+        });
+    </script>
+</body>
+</html>
